@@ -1,0 +1,21 @@
+{
+  "/Game/Fixture/SM_Rock": {
+    "origin": "generated",
+    "tool": "meshgen",
+    "plan": "free",
+    "prompt_ref": "p-001",
+    "license": "CC0-1.0",
+    "source_url": "",
+    "created_at": "2025-01-02T03:04:05Z"
+  },
+  "/Game/Fixture/T_Moss": {
+    "origin": "sourced",
+    "tool": "manual",
+    "plan": "",
+    "prompt_ref": "",
+    "license": "CC-BY-4.0",
+    "source_url": "https://example.com/moss",
+    "created_at": "2025-02-03T04:05:06Z"
+  },
+  "/Game/Fixture/M_Plain": {}
+}

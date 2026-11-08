@@ -4,12 +4,11 @@
 [![License: MIT](https://img.shields.io/pypi/l/trysac-ue-asset-intake-toolset)](LICENSE)
 [![CI](https://github.com/Trysac/u801-ue-asset-intake-toolset/actions/workflows/ci.yml/badge.svg)](https://github.com/Trysac/u801-ue-asset-intake-toolset/actions/workflows/ci.yml)
 
-Pure core and unreal adapter of an Unreal MCP toolset that imports, validates and normalizes 3D assets and textures with a provenance log.
+Pure core and Unreal adapter of an Unreal MCP toolset that imports, validates and normalizes 3D assets and textures with a provenance log.
 
 ## Problem
 
-Describe in two or three sentences the concrete problem this utility solves, who hits it, and what
-they do today without it. Replace this paragraph when the first real feature lands.
+Agents driving Unreal Engine 5.8 through its experimental Unreal MCP server import AI-generated meshes and textures with wrong names, scale, Nanite, collision and texture sizes, and leave no license provenance. Each fix is manual editor work. This package provides a pure core (naming, Nanite decision, manifest validation, asset validation, provenance rendering, path confinement) and a thin adapter that takes the `unreal` module as its first argument to import, validate, fix and log assets.
 
 ## Install
 
@@ -19,29 +18,51 @@ pip install trysac-ue-asset-intake-toolset
 uv add trysac-ue-asset-intake-toolset
 ```
 
-Requires Python 3.10 or newer. No runtime dependencies.
+Requires Python 3.10 or later. Standard library only at runtime. The Unreal API calls in the adapter have not been run inside Unreal; the tests use a fake module.
 
 ## Usage
 
 ```python
-import ue_asset_intake_toolset
+from ue_asset_intake_toolset import decide_nanite, safe_asset_name
 
-# normalize() trims surrounding whitespace and lower-cases the text.
-print(ue_asset_intake_toolset.normalize("  Hello World "))  # -> "hello world"
-
-# Blank input is rejected explicitly instead of returning an empty string.
-try:
-    ue_asset_intake_toolset.normalize("   ")
-except ValueError as exc:
-    print(f"rejected: {exc}")
+print(safe_asset_name("my cool mesh!.fbx", "StaticMesh", existing=set()))  # SM_MyCoolMesh
+print(decide_nanite(triangles=60000, is_static=True, threshold=20000))  # True
 ```
+
+Adapter functions (`import_static_mesh`, `import_batch`, `validate_assets`, `fix_assets`, `write_provenance`, `export_provenance_log`) take the `unreal` module (or a fake) as their first argument. Mutating functions default to `dry_run=True`.
+
+## Public API
+
+Core (pure, imports nothing from Unreal):
+
+- `safe_asset_name(name, asset_type, existing, max_length=64)`: returns a PascalCase name with its prefix (`SM_`, `SK_`, `T_`, `M_`, `MI_`), never equal to a name in `existing` (case-insensitive); collisions get `_01`, `_02`, and so on.
+- `decide_nanite(triangles, is_static, threshold=20000)`: True when a static mesh has at least `threshold` triangles.
+- `validate_manifest(data)`: returns a tuple of `ManifestEntry` from a list or an object with an `entries` list.
+- `validate_assets(assets, *, reference_height_cm=180.0, tolerance=10.0, nanite_threshold=20000, max_texture_size=4096)`: returns a `ValidationReport` with sorted `Violation` records.
+- `Provenance(origin, tool, plan, prompt_ref, license, source_url, created_at)`: `origin` is one of `generated`, `in_engine`, `sourced`; `created_at` is ISO 8601.
+
+Adapter (each takes `ue` first):
+
+- `import_static_mesh(ue, source_path, dest_path, name=None, provenance=None, dry_run=True)` returns `ImportResult`.
+- `import_batch(ue, entries, batch_limit=5, cursor=0, dry_run=True)` returns `BatchResult`; `cursor` is None when finished.
+- `validate_assets(ue, folder, *, reference_height_cm=180.0, tolerance=10.0, nanite_threshold=20000, max_texture_size=4096)` is read-only and returns `ValidationReport`.
+- `fix_assets(ue, fixes, dry_run=True)` returns `FixResult`. Allowed fixes: `rename_with_redirector` (`new_name`), `set_texture_max_size` (`size`, power of two up to 16384), `set_lod_group` (`group`), `add_simple_collision`, `toggle_nanite` (`enabled`). Assets are never deleted.
+- `write_provenance(ue, asset_path, provenance, dry_run=True)` returns `WriteResult`.
+- `export_provenance_log(ue, folder, fmt='md')` is read-only and returns `ExportResult`; `fmt` is `md`, `csv` or `json`.
+
+Errors: every rejected input raises `IntakeError` with a `code` and a message truncated to 200 characters. Codes: `invalid_manifest`, `path_not_allowed`, `name_conflict`, `unknown_fix`.
+
+Limits: 1000 manifest entries; `batch_limit` 1 to 1000; 1000 fixes per call; names up to 1024 characters; paths up to 512 characters; provenance fields up to 2000 characters; 10000 assets to validate; 10000 provenance records to export. Paths must be under `/Game` with forward slashes (backslashes are converted) and must not contain `.` or `..` segments.
+
+## Why not the Unreal Interchange importer
+
+The specification does not name a best-known alternative for this package, so this section is omitted.
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) and [decisions](docs/decisions/)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Testing](docs/TESTING.md) and [security](docs/SECURITY.md)
 - [Project record](docs/PROJECT.md) and [stack](docs/STACK.md)
-- [Changelog](CHANGELOG.md) and [contributing guide](CONTRIBUTING.md)
 
 ## License
 

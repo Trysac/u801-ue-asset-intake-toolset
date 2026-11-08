@@ -3,27 +3,21 @@
 ## Running
 
 ```sh
-uv run pytest --cov=ue_asset_intake_toolset   # tests with coverage report
-uv run python scripts/check.py      # every gate, as CI and the factory run it
+uv run pytest --cov=ue_asset_intake_toolset   # tests with branch coverage report
 ```
 
 ## Policy
 
-- Branch coverage of `src/ue_asset_intake_toolset` must stay at or above 85 %; the gate fails below it.
-- Tests exercise the public API (`import ue_asset_intake_toolset`) and assert every observable effect:
-  return values, raised exceptions and their messages.
-- Each bug fix starts with a failing test that reproduces it.
-- Tests are deterministic: no network, no wall clock, no dependence on test order.
+- The coverage target for `src/ue_asset_intake_toolset` is 85 %.
+- Tests call the public API and assert return values, raised `IntakeError` codes and messages, and the calls recorded on the fake unreal module.
+- Tests are intended to be deterministic: no network, no wall clock, no dependence on test order.
 
-## Tiers
+## Existing tests
 
-- Local tier (every gate run, coverage measured here): unit and property tests, plus conformance on small
-  fixtures kept in the repository.
-- CI tier: conformance that needs an external tool or a download. Mark them `@pytest.mark.conformance`; `scripts/check.py` deselects them locally
-  (unless `FABRICA_CI=1`). The CI `conformance` job sets `FABRICA_CI=1` and runs the full suite. Tools are installed
-  by the optional `ci/conformance-setup.sh` (bash, CI only; verify every download against a pinned SHA-256), and
-  tagged tests skip cleanly when their tool is missing.
+- `tests/test_adapter.py`: exercises the adapter against a fake `unreal` module (`FakeUnreal`) with a `Tripwire` that fails on unexpected mutating calls. It covers a dry-run static mesh import under `/Game/Props`, asserting that the summary starts with `dry run`, that no mutating call is recorded, and that the planned asset path is `/Game/Props/SM_MyCoolMesh`.
 
-## Layout
+No test module for the core is present in the reviewed tree. The Hypothesis properties, golden files under `tests/golden/` and the fake module under `tests/fakes/` named in the specification are not present in the reviewed tree, so this document does not describe them as existing.
 
-`tests/test_<module>.py` mirrors each public module. Shared fixtures go in `tests/conftest.py`.
+## Not tested
+
+No test runs inside Unreal Engine. All adapter behaviour is checked only against the fake module.
