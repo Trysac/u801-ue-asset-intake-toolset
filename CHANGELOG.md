@@ -9,4 +9,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add pure asset-intake core (naming, Nanite, manifest, validation, provenance) and an Unreal adapter with dry-run defaults, batch cursors and non-destructive fixes.
 - Initial project structure from the factory utility template.
