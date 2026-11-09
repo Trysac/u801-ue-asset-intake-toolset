@@ -10,7 +10,25 @@ Pure core and Unreal adapter of an Unreal MCP toolset that imports, validates an
 
 Agents driving Unreal Engine 5.8 through its experimental Unreal MCP server import AI-generated meshes and textures with wrong names, scale, Nanite, collision and texture sizes, and leave no license provenance. Each fix is manual editor work. This package provides a pure core (naming, Nanite decision, manifest validation, asset validation, provenance rendering, path confinement) and a thin adapter that takes the `unreal` module as its first argument to import, validate, fix and log assets.
 
-## Install
+## Install in Unreal Engine (the MCP toolset)
+
+1. Build the plugin: `uv run python tools/build_plugin.py` (or download the zip from a release). It
+   creates `dist/AssetIntakeToolset-<version>.zip`.
+2. Unzip it into `<YourProject>/Plugins/` (you get `Plugins/AssetIntakeToolset/`).
+3. In the editor enable **Unreal MCP**, **All Toolsets** and **Asset Intake Toolset**, restart, and
+   turn on *Editor Preferences > General > Model Context Protocol > Auto Start Server*.
+4. Run `ModelContextProtocol.GenerateClientConfig ClaudeCode` in the console (writes `.mcp.json`),
+   then start your agent from the project root. If the editor was already running, run
+   `ModelContextProtocol.RefreshTools`.
+5. The agent finds the toolset `AssetIntakeTools` through `list_toolsets` and calls it with
+   `call_tool`. See [docs/AGENT_USAGE.md](docs/AGENT_USAGE.md) and the optional Claude Code skill in
+   [skill/SKILL.md](skill/SKILL.md).
+
+Requirements: Unreal Engine 5.8 with the experimental Unreal MCP and Toolset Registry plugins.
+Python only, nothing to compile. Status: the logic and the MCP layer are tested in CI against a fake
+`unreal` module; the in-editor check is `tests/ue_smoke.py` (see [docs/TESTING.md](docs/TESTING.md)).
+
+## Install as a Python library
 
 ```sh
 pip install trysac-ue-asset-intake-toolset
@@ -18,7 +36,7 @@ pip install trysac-ue-asset-intake-toolset
 uv add trysac-ue-asset-intake-toolset
 ```
 
-Requires Python 3.10 or later. Standard library only at runtime. The Unreal API calls in the adapter have not been run inside Unreal; the tests use a fake module.
+Requires Python 3.10 or later. Standard library only at runtime.
 
 ## Usage
 
@@ -29,7 +47,9 @@ print(safe_asset_name("my cool mesh!.fbx", "StaticMesh", existing=set()))  # SM_
 print(decide_nanite(triangles=60000, is_static=True, threshold=20000))  # True
 ```
 
-Adapter functions (`import_static_mesh`, `import_batch`, `validate_assets`, `fix_assets`, `write_provenance`, `export_provenance_log`) take the `unreal` module (or a fake) as their first argument. Mutating functions default to `dry_run=True`.
+Adapter functions (`import_static_mesh`, `import_batch`, `validate_assets`, `fix_assets`, `write_provenance`, `export_provenance_log`) take the `unreal` module (or a fake) as their first argument. Mutating functions default to `dry_run=True`. After a real import, `ImportOptions` normalizes the new mesh and its textures: Nanite (`auto` by triangle count, `on` or `off`), simple box collision, a material instance in slot 0 and a texture size cap.
+
+`ue_asset_intake_toolset.mcp` exposes the same six operations with flat, JSON-friendly parameters and a JSON string result (first key `summary`; errors come back as `{"summary": "error: ...", "error": {...}}` instead of raising). The plugin's toolset class forwards to it.
 
 ## Public API
 
@@ -43,8 +63,8 @@ Core (pure, imports nothing from Unreal):
 
 Adapter (each takes `ue` first):
 
-- `import_static_mesh(ue, source_path, dest_path, name=None, provenance=None, dry_run=True)` returns `ImportResult`.
-- `import_batch(ue, entries, batch_limit=5, cursor=0, dry_run=True)` returns `BatchResult`; `cursor` is None when finished.
+- `import_static_mesh(ue, source_path, dest_path, name=None, provenance=None, dry_run=True, options=ImportOptions())` returns `ImportResult`.
+- `import_batch(ue, entries, batch_limit=5, cursor=0, dry_run=True, options=ImportOptions())` returns `BatchResult`; `cursor` is None when finished.
 - `validate_assets(ue, folder, *, reference_height_cm=180.0, tolerance=10.0, nanite_threshold=20000, max_texture_size=4096)` is read-only and returns `ValidationReport`.
 - `fix_assets(ue, fixes, dry_run=True)` returns `FixResult`. Allowed fixes: `rename_with_redirector` (`new_name`), `set_texture_max_size` (`size`, power of two up to 16384), `set_lod_group` (`group`), `add_simple_collision`, `toggle_nanite` (`enabled`). Assets are never deleted.
 - `write_provenance(ue, asset_path, provenance, dry_run=True)` returns `WriteResult`.

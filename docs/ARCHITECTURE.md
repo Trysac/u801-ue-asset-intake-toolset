@@ -7,10 +7,17 @@
 ## Shape
 
 ```text
-caller code --> ue_asset_intake_toolset (public API re-exported in __init__.py)
-                    |
-                    +-- core/   pure logic, never imports unreal
-                    +-- adapter.py  functions that receive the unreal module as ue
+AI agent --MCP--> Unreal MCP server --> Toolset Registry
+                                            |
+   plugin/AssetIntakeToolset/Content/Python/asset_intake_toolset_mcp.py  (AssetIntakeTools)
+                                            |  forwards with the real unreal module
+                                            v
+   ue_asset_intake_toolset.mcp      flat params in, JSON string out, errors as data
+                                            v
+   ue_asset_intake_toolset.adapter  functions that receive the unreal module as ue
+          |                 \
+          v                  compat.py  subsystem-or-legacy API resolution
+   core/  pure logic, never imports unreal
 ```
 
 - `core/naming.py`: `safe_asset_name` and the prefix table.
@@ -36,8 +43,18 @@ The core has no I/O and no global state. The adapter performs effects only throu
 
 ## Unreal integration
 
-The Unreal plugin packaging (`.uplugin`, the `ToolsetDefinition` class and its tool decorators) is out of scope for this package. The adapter functions are the intended entry points for that layer. The Unreal API calls inside the adapter are assumptions that were checked only against a fake module.
+- `plugin/AssetIntakeToolset/AssetIntakeToolset.uplugin` declares a Python-only editor plugin that
+  depends on `PythonScriptPlugin` and `ToolsetRegistry`.
+- `plugin/AssetIntakeToolset/Content/Python/asset_intake_toolset_mcp.py` defines
+  `AssetIntakeTools(unreal.ToolsetDefinition)`; each tool is a static method marked with
+  `@toolset_registry.tool_call`, with Google-style docstrings that the registry turns into the tool
+  schema. It contains no logic: it forwards to `mcp.py`.
+- `tools/build_plugin.py` copies the plugin and vendors the package into `Content/Python/` so the
+  editor's Python can import it without pip.
+- `compat.py` prefers UE 5.x editor subsystems and falls back to the deprecated libraries.
+- The real-engine check is `tests/ue_smoke.py` plus the manual steps in `docs/TESTING.md`.
 
 ## Decisions
 
-No architecture decision records are present in the reviewed tree.
+See `docs/decisions/` (0002: pure core with an injected adapter; 0003: plugin shell, JSON results
+and API compatibility).
