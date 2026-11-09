@@ -10,9 +10,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from .compat import box_collision_shape, static_mesh_api
 from .core.errors import IntakeError
 from .core.manifest import validate_manifest
 from .core.naming import safe_asset_name
+from .core.nanite import decide_nanite
 from .core.paths import normalize_game_path, normalize_source_path
 from .core.provenance import FIELDS, Provenance, render_provenance
 from .core.validation import AssetInfo, ValidationReport
@@ -101,6 +103,70 @@ def _write_tags(ue: Any, asset_path: str, prov: Provenance) -> None:
         ue.EditorAssetLibrary.set_metadata_tag(obj, TAG_PREFIX + key, value)
 
 
+@dataclass(frozen=True)
+class ImportOptions:
+    """Normalization applied right after an import (static meshes and their textures).
+
+    ``nanite`` None means "decide by triangle count" (static meshes at or above
+    ``nanite_threshold`` triangles get Nanite). ``max_texture_size`` 0 leaves textures untouched.
+    """
+
+    nanite: bool | None = None
+    nanite_threshold: int = 20000
+    collision: bool = True
+    material_instance: str | None = None
+    max_texture_size: int = 2048
+
+    def __post_init__(self) -> None:
+        size = self.max_texture_size
+        if type(size) is not int or size < 0 or size > 16384 or (size and size & (size - 1)):
+            raise IntakeError("invalid_manifest", "max_texture_size must be 0 or a power of two")
+        if type(self.nanite_threshold) is not int or self.nanite_threshold < 0:
+            raise IntakeError("invalid_manifest", "nanite_threshold must not be negative")
+
+
+DEFAULT_OPTIONS = ImportOptions()
+
+
+def _set_nanite(ue: Any, obj: Any, enabled: bool) -> None:
+    lib = static_mesh_api(ue)
+    settings = lib.get_nanite_settings(obj)
+    settings.enabled = enabled
+    lib.set_nanite_settings(obj, settings)
+
+
+def _normalize(ue: Any, new_paths: Sequence[str], options: ImportOptions) -> list[str]:
+    """Apply ``options`` to freshly imported assets; return a short note per change."""
+    notes: list[str] = []
+    material = None
+    if options.material_instance:
+        material = _require(ue, normalize_game_path(options.material_instance))
+    for path in new_paths:
+        obj = ue.EditorAssetLibrary.load_asset(path)
+        if obj is None:
+            continue
+        cls = obj.get_class().get_name()
+        if cls == "StaticMesh":
+            lib = static_mesh_api(ue)
+            triangles = int(lib.get_number_triangles(obj, 0))
+            nanite = options.nanite
+            if nanite is None:
+                nanite = decide_nanite(triangles, True, options.nanite_threshold)
+            _set_nanite(ue, obj, nanite)
+            notes.append(f"{_short(path)}: nanite={'on' if nanite else 'off'}")
+            if options.collision and lib.get_simple_collision_count(obj) == 0:
+                lib.add_simple_collisions(obj, box_collision_shape(ue))
+                notes.append(f"{_short(path)}: box collision")
+            if material is not None:
+                obj.set_material(0, material)
+                notes.append(f"{_short(path)}: material")
+        elif cls == "Texture2D" and options.max_texture_size:
+            obj.set_editor_property("max_texture_size", options.max_texture_size)
+            notes.append(f"{_short(path)}: max texture {options.max_texture_size}")
+        ue.EditorAssetLibrary.save_loaded_asset(obj)
+    return notes
+
+
 def _import_one(
     ue: Any,
     source: str,
@@ -110,6 +176,7 @@ def _import_one(
     provenance: Provenance | None,
     dry_run: bool,
     taken: dict[str, set[str]],
+    options: ImportOptions = DEFAULT_OPTIONS,
 ) -> ImportResult:
     if dest not in taken:
         taken[dest] = _existing(ue, dest)
@@ -120,6 +187,7 @@ def _import_one(
         return ImportResult(
             f"dry run: would import {source[:80]} as {asset_path}", asset_path, True
         )
+    before = set(_list(ue, dest))
     with ue.ScopedEditorTransaction(f"Import {name}"):
         task = ue.AssetImportTask()
         task.set_editor_property("filename", source)
@@ -128,9 +196,12 @@ def _import_one(
         task.set_editor_property("automated", True)
         task.set_editor_property("save", True)
         ue.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        new_paths = [p for p in _list(ue, dest) if p not in before]
+        notes = _normalize(ue, new_paths, options) if asset_type == "StaticMesh" else []
         if provenance is not None:
             _write_tags(ue, asset_path, provenance)
-    return ImportResult(f"imported {source[:80]} as {asset_path}", asset_path, False)
+    detail = f" ({'; '.join(notes)[:300]})" if notes else ""
+    return ImportResult(f"imported {source[:80]} as {asset_path}{detail}", asset_path, False)
 
 
 def import_static_mesh(
@@ -140,11 +211,15 @@ def import_static_mesh(
     name: str | None = None,
     provenance: Provenance | None = None,
     dry_run: bool = True,
+    options: ImportOptions = DEFAULT_OPTIONS,
 ) -> ImportResult:
-    """Import one static mesh under ``dest_path`` with a safe name (dry run by default)."""
+    """Import one static mesh under ``dest_path`` with a safe name (dry run by default).
+
+    After a real import the new mesh and its textures are normalized with ``options``.
+    """
     dest = normalize_game_path(dest_path)
     source = normalize_source_path(source_path)
-    return _import_one(ue, source, dest, name, "StaticMesh", provenance, dry_run, {})
+    return _import_one(ue, source, dest, name, "StaticMesh", provenance, dry_run, {}, options)
 
 
 def import_batch(
@@ -153,6 +228,7 @@ def import_batch(
     batch_limit: int = 5,
     cursor: int = 0,
     dry_run: bool = True,
+    options: ImportOptions = DEFAULT_OPTIONS,
 ) -> BatchResult:
     """Import up to ``batch_limit`` manifest entries starting at ``cursor``."""
     parsed = validate_manifest(entries)
@@ -166,7 +242,7 @@ def import_batch(
     chunk = plan[cursor : cursor + batch_limit]
     taken: dict[str, set[str]] = {}
     results = tuple(
-        _import_one(ue, src, dest, e.name, e.asset_type, e.provenance, dry_run, taken)
+        _import_one(ue, src, dest, e.name, e.asset_type, e.provenance, dry_run, taken, options)
         for e, dest, src in chunk
     )
     end = cursor + len(chunk)
@@ -193,7 +269,7 @@ def _describe(ue: Any, path: str) -> AssetInfo | None:
         return None
     cls = obj.get_class().get_name()
     if cls == "StaticMesh":
-        lib = ue.EditorStaticMeshLibrary
+        lib = static_mesh_api(ue)
         return AssetInfo(
             path,
             "StaticMesh",
@@ -281,11 +357,9 @@ def _apply(ue: Any, fix: _Fix) -> None:
     elif fix.name == "set_lod_group":
         obj.set_editor_property("lod_group", fix.param)
     elif fix.name == "add_simple_collision":
-        ue.EditorStaticMeshLibrary.add_simple_collisions(obj, ue.ScriptingCollisionShapeType.BOX)
+        static_mesh_api(ue).add_simple_collisions(obj, box_collision_shape(ue))
     else:
-        settings = ue.EditorStaticMeshLibrary.get_nanite_settings(obj)
-        settings.enabled = fix.param
-        ue.EditorStaticMeshLibrary.set_nanite_settings(obj, settings)
+        _set_nanite(ue, obj, bool(fix.param))
 
 
 def fix_assets(ue: Any, fixes: Sequence[Any], dry_run: bool = True) -> FixResult:

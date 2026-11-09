@@ -6,6 +6,7 @@ from .adapter import (
     BatchResult,
     ExportResult,
     FixResult,
+    ImportOptions,
     ImportResult,
     WriteResult,
     export_provenance_log,
@@ -27,6 +28,7 @@ __all__ = [
     "BatchResult",
     "ExportResult",
     "FixResult",
+    "ImportOptions",
     "ImportResult",
     "IntakeError",
     "ManifestEntry",
@@ -46,4 +48,4 @@ __all__ = [
     "write_provenance",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

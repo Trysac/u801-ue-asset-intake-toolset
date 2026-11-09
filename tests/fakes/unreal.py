@@ -45,6 +45,10 @@ class FakeAsset:
         self.ue.record("Asset.set_editor_property", (self.path, name, value), True)
         self.props[name] = value
 
+    def set_material(self, index: int, material: Any) -> None:
+        self.ue.record("Asset.set_material", (self.path, index, material.path), True)
+        self.props[f"material_{index}"] = material.path
+
 
 class _Task:
     def __init__(self) -> None:
@@ -99,6 +103,10 @@ class _AssetLibrary:
         self.ue.record("EditorAssetLibrary.set_metadata_tag", (obj.path, tag, value), True)
         obj.tags[tag] = value
 
+    def save_loaded_asset(self, obj: FakeAsset) -> bool:
+        self.ue.record("EditorAssetLibrary.save_loaded_asset", (obj.path,), True)
+        return True
+
     def get_metadata_tag(self, obj: FakeAsset, tag: str) -> str:
         self.ue.record("EditorAssetLibrary.get_metadata_tag", (obj.path, tag), False)
         return obj.tags.get(tag, "")
@@ -134,8 +142,11 @@ class _Tools:
     def import_asset_tasks(self, tasks: list[_Task]) -> None:
         self.ue.record("AssetTools.import_asset_tasks", (len(tasks),), True)
         for task in tasks:
-            path = task.props["destination_path"] + "/" + task.props["destination_name"]
-            self.ue.add_asset(path)
+            dest = task.props["destination_path"]
+            name = task.props["destination_name"]
+            self.ue.add_asset(f"{dest}/{name}", **self.ue.import_spec)
+            for texture in self.ue.import_textures:
+                self.ue.add_asset(f"{dest}/{texture}", class_name="Texture2D", size=(4096, 4096))
 
 
 class FakeUnreal:
@@ -148,6 +159,8 @@ class FakeUnreal:
         self.EditorStaticMeshLibrary = _MeshLibrary(self)
         self.AssetToolsHelpers = SimpleNamespace(get_asset_tools=lambda: _Tools(self))
         self.ScriptingCollisionShapeType = SimpleNamespace(BOX="BOX")
+        self.import_spec: dict[str, Any] = {}
+        self.import_textures: list[str] = []
 
     def record(self, name: str, args: tuple[Any, ...], mutating: bool) -> None:
         self.calls.append((name, args, mutating))
@@ -175,3 +188,19 @@ class Tripwire:
 
     def __getattr__(self, name: str) -> Any:
         raise AssertionError(f"unexpected access to unreal.{name}")
+
+
+class FakeUnreal58(FakeUnreal):
+    """UE 5.8 flavor: static-mesh calls go through StaticMeshEditorSubsystem; enum renamed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.subsystem = _MeshLibrary(self)
+        self.StaticMeshEditorSubsystem = object()
+        self.ScriptCollisionShapeType = SimpleNamespace(BOX="BOX58")
+        del self.ScriptingCollisionShapeType
+        del self.EditorStaticMeshLibrary
+
+    def get_editor_subsystem(self, cls: Any) -> Any:
+        self.record("get_editor_subsystem", (), False)
+        return self.subsystem if cls is self.StaticMeshEditorSubsystem else None

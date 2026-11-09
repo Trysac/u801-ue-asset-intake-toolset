@@ -7,14 +7,17 @@ Provide a pure core and a thin Unreal adapter that import, validate and normaliz
 ## Scope
 
 - In scope: the pure core (naming, Nanite decision, manifest validation, asset validation, provenance rendering, path confinement) and the adapter functions `import_static_mesh`, `import_batch`, `validate_assets`, `fix_assets`, `write_provenance` and `export_provenance_log`, tested on a fake `unreal` module.
-- Out of scope: the Unreal plugin packaging (`.uplugin`, the `ToolsetDefinition` class with its decorators), retopology, custom LODs, skeletal retargeting and advanced Interchange configuration.
+- In scope since 0.2.0: the Unreal plugin (`.uplugin`, `ToolsetDefinition` shell), the `mcp` layer, post-import normalization and the subsystem compatibility layer.
+- Out of scope: retopology, custom LODs, skeletal retargeting and advanced Interchange configuration.
 - Naming deviation: the package is named `ue_asset_intake_toolset` rather than `ue_asset_intake`.
 
 ## Timeline
 
 | Date | Event |
 |---|---|
-| 2026 | Repository created from the factory utility template. |
+| 2026-11-08 | Repository created from the factory utility template; factory run (core + adapter). |
+| 2026-11-08 | Interactive session (Claude Code): plugin shell, `mcp` layer, normalization, compat layer, build tool, smoke test, skill, docs (0.2.0). Not yet verified inside Unreal. |
+| pending | In-editor verification on UE 5.8 (`docs/TESTING.md`): date, engine version, smoke result. |
 
 ## Effort metrics
 
