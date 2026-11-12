@@ -81,6 +81,14 @@ class ExportResult:
     fmt: str
 
 
+def _triangle_count(obj: Any, lib: Any) -> int:
+    """UE 5.8: StaticMesh.get_num_triangles(lod) (the subsystem has no get_number_triangles)."""
+    getter = getattr(obj, "get_num_triangles", None)
+    if getter is not None:
+        return int(getter(0))
+    return int(lib.get_number_triangles(obj, 0))
+
+
 def _short(path: str) -> str:
     return path.split(".")[0]
 
@@ -148,7 +156,7 @@ def _normalize(ue: Any, new_paths: Sequence[str], options: ImportOptions) -> lis
         cls = obj.get_class().get_name()
         if cls == "StaticMesh":
             lib = static_mesh_api(ue)
-            triangles = int(lib.get_number_triangles(obj, 0))
+            triangles = _triangle_count(obj, lib)
             nanite = options.nanite
             if nanite is None:
                 nanite = decide_nanite(triangles, True, options.nanite_threshold)
@@ -273,7 +281,7 @@ def _describe(ue: Any, path: str) -> AssetInfo | None:
         return AssetInfo(
             path,
             "StaticMesh",
-            triangles=int(lib.get_number_triangles(obj, 0)),
+            triangles=_triangle_count(obj, lib),
             bounds_height_cm=float(obj.get_bounds().box_extent.z) * 2.0,
             has_collision=lib.get_simple_collision_count(obj) > 0,
             nanite_enabled=bool(lib.get_nanite_settings(obj).enabled),
