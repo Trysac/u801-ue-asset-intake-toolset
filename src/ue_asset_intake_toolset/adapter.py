@@ -81,13 +81,13 @@ class ExportResult:
     fmt: str
 
 
-
-def _triangle_count(obj, lib) -> int:
+def _triangle_count(obj: Any, lib: Any) -> int:
     """UE 5.8: StaticMesh.get_num_triangles(lod) (the subsystem has no get_number_triangles)."""
     getter = getattr(obj, "get_num_triangles", None)
     if getter is not None:
         return int(getter(0))
     return int(lib.get_number_triangles(obj, 0))
+
 
 def _short(path: str) -> str:
     return path.split(".")[0]
