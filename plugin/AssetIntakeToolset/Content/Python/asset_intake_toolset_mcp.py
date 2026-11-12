@@ -21,8 +21,8 @@ class AssetIntakeTools(unreal.ToolsetDefinition):
     and export where every asset came from (generated, in_engine or sourced) for license compliance.
     """
 
-    @staticmethod
     @toolset_registry.tool_call
+    @staticmethod
     def import_static_mesh(
         source_path: str,
         dest_folder: str = "/Game/Imported",
@@ -67,8 +67,8 @@ class AssetIntakeTools(unreal.ToolsetDefinition):
             dry_run,
         )
 
-    @staticmethod
     @toolset_registry.tool_call
+    @staticmethod
     def import_batch(
         manifest_json: str,
         batch_limit: int = 5,
@@ -107,8 +107,8 @@ class AssetIntakeTools(unreal.ToolsetDefinition):
             dry_run,
         )
 
-    @staticmethod
     @toolset_registry.tool_call
+    @staticmethod
     def validate_assets(
         folder: str,
         reference_height_cm: float = 180.0,
@@ -132,8 +132,8 @@ class AssetIntakeTools(unreal.ToolsetDefinition):
             unreal, folder, reference_height_cm, tolerance, nanite_threshold, max_texture_size
         )
 
-    @staticmethod
     @toolset_registry.tool_call
+    @staticmethod
     def fix_assets(fixes_json: str, dry_run: bool = True) -> str:
         """Apply non-destructive fixes reported by validate_assets.
 
@@ -148,8 +148,8 @@ class AssetIntakeTools(unreal.ToolsetDefinition):
         """
         return mcp.fix_assets(unreal, fixes_json, dry_run)
 
-    @staticmethod
     @toolset_registry.tool_call
+    @staticmethod
     def write_provenance(asset_path: str, provenance_json: str, dry_run: bool = True) -> str:
         """Record where an asset came from as metadata tags on the asset.
 
@@ -164,8 +164,8 @@ class AssetIntakeTools(unreal.ToolsetDefinition):
         """
         return mcp.write_provenance(unreal, asset_path, provenance_json, dry_run)
 
-    @staticmethod
     @toolset_registry.tool_call
+    @staticmethod
     def export_provenance_log(folder: str, fmt: str = "md") -> str:
         """Render the provenance of every tagged asset under a folder (read-only).
 
