@@ -74,9 +74,17 @@ Errors: every rejected input raises `IntakeError` with a `code` and a message tr
 
 Limits: 1000 manifest entries; `batch_limit` 1 to 1000; 1000 fixes per call; names up to 1024 characters; paths up to 512 characters; provenance fields up to 2000 characters; 10000 assets to validate; 10000 provenance records to export. Paths must be under `/Game` with forward slashes (backslashes are converted) and must not contain `.` or `..` segments.
 
-## Why not the Unreal Interchange importer
+## Why not the Unreal Interchange importer alone
 
-The specification does not name a best-known alternative for this package, so this section is omitted.
+This package does not replace the editor's importer: the adapter calls the standard import task
+(`AssetImportTask` through `AssetTools.import_asset_tasks`), so file formats and translators are
+whatever the editor's import pipeline provides. What the importer does not do is the intake policy
+an agent needs around each import: prefixed, collision-free asset names; a Nanite decision by
+triangle count; simple collision, a material instance and a texture size cap after import; a
+validation report against scale and texture limits; confinement of every path to `/Game`; a
+`dry_run` default for mutating calls; and a provenance record (origin, tool, license, source) per
+asset that can be exported as Markdown, CSV or JSON. Those rules live in a pure core that is tested
+without the editor.
 
 ## Documentation
 
