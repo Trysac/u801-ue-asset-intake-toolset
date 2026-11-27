@@ -1,7 +1,6 @@
 # ue-asset-intake-toolset
 
-[![PyPI version](https://img.shields.io/pypi/v/trysac-ue-asset-intake-toolset)](https://pypi.org/project/trysac-ue-asset-intake-toolset/)
-[![License: MIT](https://img.shields.io/pypi/l/trysac-ue-asset-intake-toolset)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/Trysac/u801-ue-asset-intake-toolset/actions/workflows/ci.yml/badge.svg)](https://github.com/Trysac/u801-ue-asset-intake-toolset/actions/workflows/ci.yml)
 
 Pure core and Unreal adapter of an Unreal MCP toolset that imports, validates and normalizes 3D assets and textures with a provenance log.
